@@ -1,6 +1,16 @@
+# Build output
 target/
-*.log
+
+# Runtime logs (written by FileStore to logs/)
 logs/
+*.log
+
+# IDE / editor
 .vscode/
 .idea/
 *.class
+
+# Node — only the frontend subfolder should have these
+node_modules/
+/package-lock.json
+/package.json

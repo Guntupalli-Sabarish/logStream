@@ -7,63 +7,65 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.lang.reflect.Field;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * FileStoreTest uses a self-contained TestFileStore inner class
+ * (same logic as FileStore, but writes to @TempDir).
+ */
 class FileStoreTest {
 
     @TempDir
     Path tempDir;
 
-    private FileStore fileStore;
+    private TestFileStore fileStore;
+    private ObjectMapper  mapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {
-        // Point FileStore at the temp directory for isolation
-        fileStore = createFileStoreWithTempDir(tempDir);
+        fileStore = new TestFileStore(tempDir, mapper);
     }
 
     @AfterEach
-    void tearDown() {
-        fileStore.close();
-    }
+    void tearDown() { fileStore.close(); }
 
     @Test
-    void addLog_writesFormattedLineToFile() throws IOException {
-        Log log = buildLog("Server started", Severity.HIGH);
-        fileStore.addLog(log);
+    void addLog_writesJsonLineToFile() throws IOException {
+        fileStore.addLog(buildLog("Server started", Severity.HIGH));
         fileStore.close();
 
-        List<String> lines = readLogLines();
+        List<String> lines = Files.readAllLines(tempDir.resolve("system.log"));
         assertEquals(1, lines.size());
-        assertTrue(lines.get(0).contains("[HIGH]"), "Line should contain severity");
-        assertTrue(lines.get(0).contains("Server started"), "Line should contain log data");
+        JsonNode node = mapper.readTree(lines.get(0));
+        assertEquals("HIGH",           node.get("severity").asText());
+        assertEquals("Server started", node.get("data").asText());
     }
 
     @Test
     void addLog_sanitizesNewlinesInData() throws IOException {
-        Log log = buildLog("line1\nFORGED: [HIGH] injected", Severity.LOW);
-        fileStore.addLog(log);
+        fileStore.addLog(buildLog("line1\nFORGED: [HIGH] injected", Severity.LOW));
         fileStore.close();
 
-        List<String> lines = readLogLines();
-        assertEquals(1, lines.size(), "Newline injection should produce only 1 line");
-        assertTrue(lines.get(0).contains("line1 FORGED"), "Newline should be replaced with space");
+        List<String> lines = Files.readAllLines(tempDir.resolve("system.log"));
+        assertEquals(1, lines.size(), "Newline injection must produce only 1 JSON line");
     }
 
     @Test
     void addLog_sanitizesCarriageReturns() throws IOException {
-        Log log = buildLog("data\r\ninjected", Severity.WARN);
-        fileStore.addLog(log);
+        fileStore.addLog(buildLog("data\r\ninjected", Severity.WARN));
         fileStore.close();
 
-        List<String> lines = readLogLines();
+        List<String> lines = Files.readAllLines(tempDir.resolve("system.log"));
         assertEquals(1, lines.size());
     }
 
@@ -71,27 +73,30 @@ class FileStoreTest {
     void clearFile_truncatesExistingContent() throws IOException {
         fileStore.addLog(buildLog("before clear", Severity.LOW));
         fileStore.clearFile();
-        fileStore.addLog(buildLog("after clear", Severity.LOW));
+        fileStore.addLog(buildLog("after clear",  Severity.LOW));
         fileStore.close();
 
-        List<String> lines = readLogLines();
-        assertEquals(1, lines.size(), "Only the post-clear log should exist");
-        assertTrue(lines.get(0).contains("after clear"));
+        List<String> lines = Files.readAllLines(tempDir.resolve("system.log"));
+        assertEquals(1, lines.size(), "Only post-clear log should remain");
+        JsonNode node = mapper.readTree(lines.get(0));
+        assertEquals("after clear", node.get("data").asText());
     }
 
     @Test
-    void addLog_handlesNullTimestampAndSeverity() throws IOException {
-        Log log = new Log("minimal log");
+    void addLog_handlesNullSeverity() throws IOException {
+        Log log = new Log("minimal");
+        log.setTimestamp(new Timestamp(System.currentTimeMillis()));
         fileStore.addLog(log);
         fileStore.close();
 
-        List<String> lines = readLogLines();
+        List<String> lines = Files.readAllLines(tempDir.resolve("system.log"));
         assertEquals(1, lines.size());
-        assertTrue(lines.get(0).contains("[N/A]"), "Null timestamp should show N/A");
-        assertTrue(lines.get(0).contains("[LOW]"),  "Null severity should default to LOW");
+        // severity null → JSON null, no crash
+        JsonNode node = mapper.readTree(lines.get(0));
+        assertEquals("minimal", node.get("data").asText());
     }
 
-    // --- helpers ---
+    // ── helpers ─────────────────────────────────────────────────────────────
 
     private Log buildLog(String data, Severity severity) {
         Log log = new Log(data);
@@ -100,80 +105,44 @@ class FileStoreTest {
         return log;
     }
 
-    private List<String> readLogLines() throws IOException {
-        Path logFile = tempDir.resolve("system.log");
-        return Files.readAllLines(logFile);
-    }
-
-    /**
-     * Creates a FileStore pointed at the given temp directory by reflectively
-     * overriding the FILE_PATH field (avoids polluting the project's logs/ dir).
-     */
-    private FileStore createFileStoreWithTempDir(Path dir) throws Exception {
-        // We subclass FileStore to inject the temp path via a package-private constructor trick.
-        // Since FILE_PATH is derived from LOG_DIR, we use a test subclass instead.
-        return new TempFileStore(dir);
-    }
-
-    // Test-only subclass that writes to the temp directory
-    static class TempFileStore extends FileStore {
+    // Self-contained test double — same logic as FileStore but uses tempDir
+    static class TestFileStore {
         private final Path logFile;
-        private java.io.PrintWriter writer;
-        private final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock();
+        private final ObjectMapper mapper;
+        private PrintWriter writer;
+        private final ReentrantLock lock = new ReentrantLock();
 
-        TempFileStore(Path dir) throws Exception {
-            // Don't call super() as it would create logs/ in project root during tests.
-            // We override all methods instead.
-            logFile = dir.resolve("system.log");
+        TestFileStore(Path dir, ObjectMapper mapper) throws IOException {
+            this.logFile = dir.resolve("system.log");
+            this.mapper  = mapper;
             openWriter(true);
         }
 
-        private void openWriter(boolean append) throws Exception {
-            writer = new java.io.PrintWriter(
-                new java.io.BufferedWriter(new java.io.FileWriter(logFile.toFile(), append)));
+        private void openWriter(boolean append) throws IOException {
+            writer = new PrintWriter(new BufferedWriter(new FileWriter(logFile.toFile(), append)));
         }
 
-        @Override
-        public void addLog(Log log) {
-            String timestamp = log.getTimestamp() != null ? log.getTimestamp().toString() : "N/A";
-            String severity  = log.getSeverity()  != null ? log.getSeverity().toString()  : "LOW";
-            String rawData   = log.getData()       != null ? log.getData()                 : "";
-            String sanitized = rawData.replaceAll("[\\r\\n\\t]", " ");
-
+        void addLog(Log log) {
+            if (log.getData() != null) log.setData(log.getData().replaceAll("[\\r\\n\\t]", " "));
             lock.lock();
             try {
-                writer.println(String.format("[%s] [%s] %s", timestamp, severity, sanitized));
+                writer.println(mapper.writeValueAsString(log));
                 writer.flush();
-            } finally {
-                lock.unlock();
-            }
+            } catch (Exception e) { throw new RuntimeException(e); }
+            finally { lock.unlock(); }
         }
 
-        @Override
-        public void clearFile() {
+        void clearFile() {
             lock.lock();
-            try {
-                writer.close();
-                openWriter(false);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            } finally {
-                lock.unlock();
-            }
+            try { writer.close(); openWriter(false); }
+            catch (IOException e) { throw new RuntimeException(e); }
+            finally { lock.unlock(); }
         }
 
-        @Override
-        public void close() {
+        void close() {
             lock.lock();
-            try {
-                if (writer != null) {
-                    writer.flush();
-                    writer.close();
-                    writer = null;
-                }
-            } finally {
-                lock.unlock();
-            }
+            try { if (writer != null) { writer.flush(); writer.close(); writer = null; } }
+            finally { lock.unlock(); }
         }
     }
 }

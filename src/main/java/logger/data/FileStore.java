@@ -1,6 +1,8 @@
 package logger.data;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import logger.pojo.Log;
+import org.springframework.stereotype.Component;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -9,21 +11,24 @@ import java.nio.file.Paths;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 
+@Component
 public class FileStore implements Datastore {
 
     private static final String LOG_DIR = "logs";
     private static final String FILE_PATH = LOG_DIR + File.separator + "system.log";
 
     private final ReentrantLock writeLock = new ReentrantLock();
+    private final ObjectMapper objectMapper;
     private PrintWriter writer;
 
-    public FileStore() {
+    public FileStore(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         try {
             Path logDir = Paths.get(LOG_DIR);
             if (!Files.exists(logDir)) {
                 Files.createDirectories(logDir);
             }
-            openWriter(true); // append=true on startup
+            openWriter(true);
         } catch (IOException e) {
             System.err.println("Failed to initialize FileStore: " + e.getMessage());
         }
@@ -35,33 +40,36 @@ public class FileStore implements Datastore {
 
     @Override
     public void addLog(Log log) {
-        String timestamp = log.getTimestamp() != null ? log.getTimestamp().toString() : "N/A";
-        String severity  = log.getSeverity()  != null ? log.getSeverity().toString()  : "LOW";
-        String rawData   = log.getData()       != null ? log.getData()                 : "";
-
-        // Sanitize: replace newlines/tabs to prevent log injection
-        String sanitizedData = rawData.replaceAll("[\\r\\n\\t]", " ");
-
         writeLock.lock();
         try {
             if (writer != null) {
-                writer.println(String.format("[%s] [%s] %s", timestamp, severity, sanitizedData));
+                // JSON Lines: one JSON object per line (sanitize data field)
+                Log sanitized = sanitize(log);
+                writer.println(objectMapper.writeValueAsString(sanitized));
                 writer.flush();
             }
+        } catch (Exception e) {
+            System.err.println("Failed to write log to file: " + e.getMessage());
         } finally {
             writeLock.unlock();
         }
+    }
+
+    /** Replace control characters in log.data to prevent log injection. */
+    private Log sanitize(Log log) {
+        if (log.getData() == null) return log;
+        // We serialize to JSON so newlines are escaped automatically by Jackson,
+        // but sanitize anyway for defense-in-depth.
+        log.setData(log.getData().replaceAll("[\\r\\n\\t]", " "));
+        return log;
     }
 
     @Override
     public void clearFile() {
         writeLock.lock();
         try {
-            // Close existing writer, reopen with append=false (truncate)
-            if (writer != null) {
-                writer.close();
-            }
-            openWriter(false);
+            if (writer != null) writer.close();
+            openWriter(false); // truncate
         } catch (IOException e) {
             System.err.println("Failed to clear log file: " + e.getMessage());
         } finally {
@@ -85,7 +93,7 @@ public class FileStore implements Datastore {
 
     @Override
     public void appendLog() throws TimeoutException {
-        // Intended for future batch processing; individual writes handled by addLog()
+        // reserved for future batch processing
     }
 
 }

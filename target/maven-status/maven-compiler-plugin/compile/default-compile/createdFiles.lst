@@ -1,8 +1,0 @@
-logger\controller\HomeController.class
-logger\data\FileStore.class
-logger\data\Datastore.class
-logger\pojo\Log.class
-logger\controller\LogController.class
-logger\service\Logger.class
-logger\App.class
-logger\enums\Severity.class

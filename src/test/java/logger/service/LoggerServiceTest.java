@@ -1,13 +1,20 @@
 package logger.service;
 
+import logger.alert.AlertEngine;
+import logger.alert.AlertRule;
+import logger.alert.WebhookNotifier;
+import logger.data.FileStore;
 import logger.pojo.Log;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Field;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class LoggerServiceTest {
 
@@ -15,8 +22,19 @@ class LoggerServiceTest {
 
     @BeforeEach
     void setUp() {
-        logger = new Logger();
-        logger.init(); // Manually call @PostConstruct
+        // Build minimal collaborators (mocked — no real I/O)
+        FileStore mockFileStore     = mock(FileStore.class);
+        SseEmitterRegistry mockSse  = mock(SseEmitterRegistry.class);
+        WebhookNotifier mockHook    = mock(WebhookNotifier.class);
+        AlertEngine alertEngine     = new AlertEngine(mockHook);
+
+        logger = new Logger(mockFileStore, mockSse, alertEngine);
+        logger.init();
+    }
+
+    @AfterEach
+    void tearDown() {
+        logger.shutdown();
     }
 
     @Test
@@ -44,19 +62,14 @@ class LoggerServiceTest {
     @Test
     void addLog_boundedBuffer_evictsOldestWhenFull() throws Exception {
         int maxLogs = getMaxLogs();
-
-        // Fill the buffer to capacity
-        for (int i = 0; i < maxLogs; i++) {
-            logger.addLog(buildLog("log-" + i));
-        }
+        for (int i = 0; i < maxLogs; i++) logger.addLog(buildLog("log-" + i));
         assertEquals(maxLogs, logger.getLogs().size());
 
-        // Adding one more should evict the oldest
         logger.addLog(buildLog("overflow-log"));
 
         List<Log> logs = logger.getLogs();
-        assertEquals(maxLogs, logs.size(), "Buffer should stay bounded at MAX_LOGS");
-        assertEquals("log-1", logs.get(0).getData(), "Oldest log should have been evicted");
+        assertEquals(maxLogs, logs.size(), "Buffer must stay bounded at MAX_LOGS");
+        assertEquals("log-1",        logs.get(0).getData(), "Oldest should be evicted");
         assertEquals("overflow-log", logs.get(logs.size() - 1).getData());
     }
 
@@ -64,21 +77,18 @@ class LoggerServiceTest {
     void clearLogs_removesAllInMemoryLogs() {
         logger.addLog(buildLog("a"));
         logger.addLog(buildLog("b"));
-
         logger.clearLogs();
-
-        assertTrue(logger.getLogs().isEmpty(), "Logs should be empty after clear");
+        assertTrue(logger.getLogs().isEmpty());
     }
 
     @Test
     void getLogs_returnsUnmodifiableSnapshot() {
         logger.addLog(buildLog("x"));
         List<Log> snapshot = logger.getLogs();
-
         assertThrows(UnsupportedOperationException.class, () -> snapshot.add(buildLog("y")));
     }
 
-    // --- helpers ---
+    // ── helpers ─────────────────────────────────────────────────────────────
 
     private Log buildLog(String data) {
         Log log = new Log(data);
@@ -86,7 +96,6 @@ class LoggerServiceTest {
         return log;
     }
 
-    /** Reflectively reads the MAX_LOGS constant from Logger. */
     private int getMaxLogs() throws Exception {
         Field f = Logger.class.getDeclaredField("MAX_LOGS");
         f.setAccessible(true);

@@ -1,156 +1,112 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
+import LiveFeed      from './components/LiveFeed.jsx';
+import StatsPanel    from './components/StatsPanel.jsx';
+import TraceExplorer from './components/TraceExplorer.jsx';
+import ServiceHealth from './components/ServiceHealth.jsx';
 
-function App() {
-  const [logs, setLogs] = useState([]);
-  const [newLog, setNewLog] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSeverity, setFilterSeverity] = useState('ALL');
-  const [newLogSeverity, setNewLogSeverity] = useState('LOW');
+const API  = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const TABS = [
+  { id: 'Live Feed', icon: '◉' },
+  { id: 'Stats',     icon: '▦' },
+  { id: 'Traces',    icon: '⌖' },
+  { id: 'Health',    icon: '◈' },
+];
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+export default function App() {
+  const [logs,      setLogs]      = useState([]);
+  const [tab,       setTab]       = useState('Live Feed');
+  const [connected, setConnected] = useState(false);
+  const esRef = useRef(null);
 
-  const fetchLogs = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/logs`);
-      // Use spread to avoid mutating the axios response array
-      setLogs([...response.data].reverse());
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-    }
-  };
+  // ── SSE ──────────────────────────────────────────────────────────────────
+  const connectSse = useCallback(() => {
+    if (esRef.current) esRef.current.close();
+    const es = new EventSource(`${API}/api/logs/stream`);
+    esRef.current = es;
 
-  const addSimulatedLog = async () => {
-    if (!newLog) return;
-    try {
-      await axios.post(`${API_BASE_URL}/api/logs`, {
-        data: newLog,
-        severity: newLogSeverity,
-        threadName: 'UI-Thread'
-      });
-      setNewLog('');
-      fetchLogs();
-    } catch (error) {
-      console.error('Error adding log:', error);
-    }
+    es.onopen = () => setConnected(true);
+
+    es.addEventListener('log', (e) => {
+      try {
+        const log = JSON.parse(e.data);
+        setLogs(prev => {
+          if (prev.some(l => l.id === log.id)) return prev;
+          return [log, ...prev].slice(0, 5000);
+        });
+      } catch (_) {}
+    });
+
+    es.onerror = () => {
+      setConnected(false);
+      es.close();
+      setTimeout(connectSse, 3000);
+    };
+  }, []);
+
+  // ── Initial load + SSE ───────────────────────────────────────────────────
+  useEffect(() => {
+    axios.get(`${API}/api/logs`)
+         .then(r => setLogs([...r.data].reverse()))
+         .catch(console.error);
+    connectSse();
+    return () => { if (esRef.current) esRef.current.close(); };
+  }, [connectSse]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const addLog = async (payload) => {
+    try { await axios.post(`${API}/api/logs`, payload); }
+    catch (e) { console.error(e); }
   };
 
   const clearLogs = async () => {
-    try {
-      await axios.delete(`${API_BASE_URL}/api/logs`);
-      fetchLogs();
-    } catch (error) {
-      console.error('Error clearing logs:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      let matchesSearch = false;
-      try {
-        const regex = new RegExp(searchTerm, 'i');
-        matchesSearch = regex.test(log.data);
-      } catch (e) {
-        matchesSearch = log.data.toLowerCase().includes(searchTerm.toLowerCase());
-      }
-      const matchesSeverity = filterSeverity === 'ALL' || (log.severity || 'LOW') === filterSeverity;
-      return matchesSearch && matchesSeverity;
-    });
-  }, [logs, searchTerm, filterSeverity]);
-
-  // Safe timestamp formatter — returns "N/A" if timestamp is null/invalid
-  const formatTimestamp = (ts) => {
-    if (!ts) return 'N/A';
-    const d = new Date(ts);
-    return isNaN(d.getTime()) ? 'N/A' : d.toLocaleTimeString();
+    try { await axios.delete(`${API}/api/logs`); setLogs([]); }
+    catch (e) { console.error(e); }
   };
 
   return (
-    <div className="container">
+    <div className="app">
+
+      {/* ── Header ── */}
       <header className="header">
-        <h1>System Monitor</h1>
-        <div className="status-badge">Live</div>
+        <div className="header-inner">
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="logo">LOGSTREAM</span>
+            <span className={`live-badge ${connected ? '' : 'disconnected'}`}>
+              <span className="dot" />
+              {connected ? 'LIVE' : 'OFFLINE'}
+            </span>
+          </div>
+          <span className="header-right">{logs.length} / 5000 entries</span>
+        </div>
       </header>
 
-      <div className="controls-card">
-        <div className="input-group">
-          <select
-            id="severity-select"
-            value={newLogSeverity}
-            onChange={(e) => setNewLogSeverity(e.target.value)}
-            className="severity-select"
-          >
-            <option value="LOW">Low</option>
-            <option value="WARN">Warn</option>
-            <option value="HIGH">High</option>
-          </select>
-          <input
-            id="log-input"
-            type="text"
-            value={newLog}
-            onChange={(e) => setNewLog(e.target.value)}
-            placeholder="Simulate a system log..."
-            className="log-input"
-            onKeyDown={(e) => e.key === 'Enter' && addSimulatedLog()}
-          />
-          <button id="add-log-btn" onClick={addSimulatedLog} className="add-btn">Add Log</button>
+      {/* ── Nav ── */}
+      <nav className="nav">
+        <div className="nav-inner">
+          {TABS.map(({ id, icon }) => (
+            <button
+              key={id}
+              className={`nav-tab ${tab === id ? 'active' : ''}`}
+              onClick={() => setTab(id)}
+            >
+              <span style={{ fontFamily: 'monospace' }}>{icon}</span> {id}
+            </button>
+          ))}
         </div>
+      </nav>
 
-        <div className="filters">
-          <input
-            id="search-input"
-            type="text"
-            placeholder="Search logs (supports regex)..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
-          <select
-            id="filter-severity-select"
-            value={filterSeverity}
-            onChange={(e) => setFilterSeverity(e.target.value)}
-            className="filter-select"
-          >
-            <option value="ALL">All Severities</option>
-            <option value="HIGH">High</option>
-            <option value="WARN">Warn</option>
-            <option value="LOW">Low</option>
-          </select>
+      {/* ── Page ── */}
+      <main className="page">
+        <div className="page-inner">
+          {tab === 'Live Feed' && <LiveFeed    logs={logs} addLog={addLog} clearLogs={clearLogs} />}
+          {tab === 'Stats'     && <StatsPanel  api={API} />}
+          {tab === 'Traces'    && <TraceExplorer api={API} logs={logs} />}
+          {tab === 'Health'    && <ServiceHealth logs={logs} />}
         </div>
-      </div>
+      </main>
 
-      <div className="logs-container">
-        <div className="logs-header">
-          <h3>Recent Logs ({filteredLogs.length})</h3>
-          <button id="clear-logs-btn" onClick={clearLogs} className="clear-btn">Clear Logs</button>
-        </div>
-        {filteredLogs.length === 0 ? (
-          <div className="empty-state">No matching logs found.</div>
-        ) : (
-          filteredLogs.map((log) => (
-            // Use stable server-assigned ID as React key
-            <div key={log.id} className="log-card">
-              <div className="log-meta">
-                <span className="timestamp">{formatTimestamp(log.timestamp)}</span>
-                <span className={`severity ${log.severity ? log.severity.toLowerCase() : 'low'}`}>
-                  {log.severity || 'LOW'}
-                </span>
-                <span className="thread">[{log.threadName || 'main'}]</span>
-              </div>
-              <div className="log-message">{log.data}</div>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }
-
-export default App;
