@@ -15,59 +15,63 @@ When a distributed application fails, developers are blind. Logs are scattered a
 
 ```mermaid
 graph TD
-    subgraph Producers ["Your Microservices"]
-        SDK[Java SDK Batching]
-        SVC1[Service A]
-        SVC2[Service B]
-        SDK -- HTTP POST --> INGEST
-        SVC1 -- HTTP POST --> INGEST
-        SVC2 -- HTTP POST --> INGEST
-    end
+    Producers["Log Producers
+    Microservices
+    Java SDK"]
 
-    subgraph "LogStream Backend (Spring Boot)"
-        INGEST[LogController]
-        
-        INGEST --> Ring[(In-Memory Buffer<br/>5k Ring)]
-        INGEST --> Queue[[Async Processing Queue<br/>10k Bounded]]
-        
-        Queue --> |Worker Thread| Router{Event Router}
-        
-        Router --> DiskStore[(logs/system.log<br/>JSON Lines)]
-        Router --> Alert[AlertEngine]
-        Router --> SSE[SseEmitterRegistry]
-        
-        Alert -- Sliding Window Rules --> Webhook[Webhook Notifier<br/>Slack/Discord/HTTP]
-    end
+    SpringBoot["Spring Boot REST API
+    LogController
+    AlertController"]
 
-    subgraph Client ["Browser Dashboard"]
-        SSE -- Server-Sent Events --> UI[React UI]
-        UI -- Render --> Feed(⚡ Live Feed)
-        UI -- Render --> Stats(📊 Metrics & Charts)
-        UI -- Render --> Trace(🔍 Trace Explorer)
-    end
+    Engine["Logger Engine
+    ArrayDeque (5k)
+    BlockingQueue (10k)
+    Worker Thread"]
+
+    Alerts["Alert Engine
+    Sliding Window Rules"]
+
+    Disk["File Store
+    JSON Lines (system.log)"]
+
+    SSE["SseEmitterRegistry
+    Real-Time Push"]
+
+    Webhooks["Webhook Integration
+    Slack / Discord / HTTP"]
+
+    Frontend["React Frontend - Vite
+    Live Feed
+    Metrics & Charts
+    Trace Explorer"]
+
+    Browser["Client Browser"]
+
+    Producers -- "HTTP POST" --> SpringBoot
+    SpringBoot --> Engine
+    
+    Engine --> Alerts
+    Engine --> Disk
+    Engine --> SSE
+
+    Alerts --> Webhooks
+    SSE -- "Server-Sent Events" --> Frontend
+    Frontend --> Browser
 ```
 
 ---
 
-## Features
+## ✨ Features
 
-**Real-time streaming** — The dashboard connects via SSE (`EventSource`). Logs are pushed the instant they arrive. No polling, no lag. Browser auto-reconnects on disconnect.
-
-**Structured query API** — Filter logs server-side by severity, service, traceId, regex search, or time range. Max 5,000 entries in memory; O(n) scan is fast enough.
-
-**Distributed tracing** — Logs carry `traceId` and `spanId`. The Trace Explorer renders a full timeline of all logs for a given request across every service.
-
-**Live statistics** — `GET /api/logs/stats` returns severity distribution, top services by volume, rate per minute, and a 10-minute rate history for charts.
-
-**Service health board** — Classifies each service as Healthy, Degraded (has HIGH logs in last 5 min), or Silent (no recent logs).
-
-**Alert engine** — Sliding-window rules: fire when N logs of a given severity appear within X seconds. Alerts delivered to any HTTP webhook (Slack, Discord, or custom). Rules managed via API at runtime.
-
-**Bounded, safe by design** — In-memory store capped at 5,000 logs. Processing queue capped at 10,000. Non-blocking `offer()` on the queue means the API never blocks under load. Graceful shutdown drains the queue before exit.
-
-**JSON Lines on disk** — Every log is persisted as a JSON object on one line. Readable with `jq`, parseable by any tool.
-
-**Java SDK** — A zero-Spring async batching client for shipping logs from any Java 17+ app. Buffers 1,000 entries, flushes every 500 ms via `POST /api/logs/batch`.
+- ⚡ **Real-Time Streaming:** The dashboard connects via SSE (`EventSource`). Logs are pushed the instant they arrive—no polling, no lag.
+- 🔍 **Structured Query API:** Filter logs server-side by severity, service, `traceId`, regex search, or time range. In-memory O(n) scan ensures microsecond latency.
+- 🔗 **Distributed Tracing:** Seamlessly links logs using `traceId` and `spanId`. The Trace Explorer renders a full timeline across every service.
+- 📊 **Live Statistics:** Instantly visualizes severity distribution, top services by volume, and rate per minute.
+- 🩺 **Service Health Board:** Automatically classifies each service as **Healthy**, **Degraded**, or **Silent**.
+- 🚨 **Alert Engine:** Sliding-window rules trigger webhooks when anomalous patterns occur (e.g., 5 `HIGH` severity logs within 60 seconds).
+- 🛡️ **Bounded & Safe:** Built-in backpressure. Non-blocking `offer()` queue prevents the API from stalling under high load.
+- 💾 **JSON Lines Persistence:** Every log is cleanly appended as a single JSON object, making it `jq` compatible.
+- ☕ **Java SDK:** A zero-dependency async batching client for any Java 17+ app. Buffers entries and flushes efficiently.
 
 ---
 
@@ -108,6 +112,9 @@ npm run dev
 | `PORT` | `8080` | Backend HTTP Port |
 | `ALLOWED_ORIGINS` | `http://localhost:5173` | CORS allow-list for the frontend |
 | `alert.webhook.url` | *(empty)* | Webhook URL for external alert delivery (e.g., Slack) |
+
+> [!TIP]
+> **Securing your Webhook URL locally:** Instead of placing your webhook URL in the main `application.properties` (which is tracked by Git), create a file named `application-secret.properties` in `src/main/resources/`. Add your URL there (`alert.webhook.url=...`). The main properties file is configured to import this secret file, and `.gitignore` ensures it never gets uploaded to your repository!
 
 ### Docker Deployment
 
