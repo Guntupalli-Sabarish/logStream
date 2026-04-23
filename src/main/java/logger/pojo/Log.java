@@ -7,15 +7,33 @@ import java.sql.Timestamp;
 
 public class Log implements Serializable {
 
+    private String id;
+
     private String data;
+
+    private Timestamp timestamp;
+
+    private String threadId;
+
+    private String threadName;
+
+    private Severity severity;
+
+    private String stackTrace;
 
     public Log() {
     }
 
     public Log(String data) {
         this.data = data;
-        // Todo: Figure out how to get thread information when user is adding/appending
-        // any log and add stackTrace
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getData() {
@@ -50,15 +68,13 @@ public class Log implements Serializable {
         this.threadName = threadName;
     }
 
-    private Timestamp timestamp;
+    public Severity getSeverity() {
+        return severity;
+    }
 
-    private String threadId;
-
-    private String threadName;
-
-    private Severity severity;
-
-    private String stackTrace;
+    public void setSeverity(Severity severity) {
+        this.severity = severity;
+    }
 
     public String getStackTrace() {
         return stackTrace;
@@ -66,14 +82,6 @@ public class Log implements Serializable {
 
     public void setStackTrace(String stackTrace) {
         this.stackTrace = stackTrace;
-    }
-
-    public Severity getSeverity() {
-        return severity;
-    }
-
-    public void setSeverity(Severity severity) {
-        this.severity = severity;
     }
 
 }

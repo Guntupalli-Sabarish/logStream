@@ -7,19 +7,19 @@ function App() {
   const [newLog, setNewLog] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('ALL');
+  const [newLogSeverity, setNewLogSeverity] = useState('LOW');
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
   const fetchLogs = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/logs`);
-      setLogs(response.data.reverse());
+      // Use spread to avoid mutating the axios response array
+      setLogs([...response.data].reverse());
     } catch (error) {
       console.error('Error fetching logs:', error);
     }
   };
-
-  const [newLogSeverity, setNewLogSeverity] = useState('LOW');
 
   const addSimulatedLog = async () => {
     if (!newLog) return;
@@ -35,6 +35,7 @@ function App() {
       console.error('Error adding log:', error);
     }
   };
+
   const clearLogs = async () => {
     try {
       await axios.delete(`${API_BASE_URL}/api/logs`);
@@ -50,23 +51,26 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Level 2: Filter Logic (Enhanced with Regex)
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
       let matchesSearch = false;
       try {
-        // Try Regex Search first
-        const regex = new RegExp(searchTerm, 'i'); // 'i' for case-insensitive
+        const regex = new RegExp(searchTerm, 'i');
         matchesSearch = regex.test(log.data);
       } catch (e) {
-        // Fallback to simple string search if Regex syntax is invalid (e.g. while typing)
         matchesSearch = log.data.toLowerCase().includes(searchTerm.toLowerCase());
       }
-
       const matchesSeverity = filterSeverity === 'ALL' || (log.severity || 'LOW') === filterSeverity;
       return matchesSearch && matchesSeverity;
     });
   }, [logs, searchTerm, filterSeverity]);
+
+  // Safe timestamp formatter — returns "N/A" if timestamp is null/invalid
+  const formatTimestamp = (ts) => {
+    if (!ts) return 'N/A';
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? 'N/A' : d.toLocaleTimeString();
+  };
 
   return (
     <div className="container">
@@ -78,6 +82,7 @@ function App() {
       <div className="controls-card">
         <div className="input-group">
           <select
+            id="severity-select"
             value={newLogSeverity}
             onChange={(e) => setNewLogSeverity(e.target.value)}
             className="severity-select"
@@ -87,6 +92,7 @@ function App() {
             <option value="HIGH">High</option>
           </select>
           <input
+            id="log-input"
             type="text"
             value={newLog}
             onChange={(e) => setNewLog(e.target.value)}
@@ -94,18 +100,20 @@ function App() {
             className="log-input"
             onKeyDown={(e) => e.key === 'Enter' && addSimulatedLog()}
           />
-          <button onClick={addSimulatedLog} className="add-btn">Add Log</button>
+          <button id="add-log-btn" onClick={addSimulatedLog} className="add-btn">Add Log</button>
         </div>
 
         <div className="filters">
           <input
+            id="search-input"
             type="text"
-            placeholder="Search logs..."
+            placeholder="Search logs (supports regex)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
           <select
+            id="filter-severity-select"
             value={filterSeverity}
             onChange={(e) => setFilterSeverity(e.target.value)}
             className="filter-select"
@@ -121,15 +129,16 @@ function App() {
       <div className="logs-container">
         <div className="logs-header">
           <h3>Recent Logs ({filteredLogs.length})</h3>
-          <button onClick={clearLogs} className="clear-btn">Clear Logs</button>
+          <button id="clear-logs-btn" onClick={clearLogs} className="clear-btn">Clear Logs</button>
         </div>
         {filteredLogs.length === 0 ? (
           <div className="empty-state">No matching logs found.</div>
         ) : (
-          filteredLogs.map((log, index) => (
-            <div key={index} className="log-card">
+          filteredLogs.map((log) => (
+            // Use stable server-assigned ID as React key
+            <div key={log.id} className="log-card">
               <div className="log-meta">
-                <span className="timestamp">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <span className="timestamp">{formatTimestamp(log.timestamp)}</span>
                 <span className={`severity ${log.severity ? log.severity.toLowerCase() : 'low'}`}>
                   {log.severity || 'LOW'}
                 </span>

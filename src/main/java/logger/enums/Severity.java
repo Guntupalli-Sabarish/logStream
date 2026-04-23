@@ -6,18 +6,14 @@ public enum Severity {
     WARN("warn"),
     LOW("low");
 
+    private final String name;
+
+    Severity(String name) {
+        this.name = name;
+    }
+
     public String getName() {
         return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    private String name;
-
-    Severity(String name){
-        this.name = name;
     }
 
 }

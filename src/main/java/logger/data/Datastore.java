@@ -10,4 +10,8 @@ public interface Datastore {
 
     void appendLog() throws TimeoutException;
 
+    void clearFile();
+
+    void close();
+
 }
