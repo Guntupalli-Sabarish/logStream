@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
-
 const STALE_MS   = 5 * 60 * 1000;
 const DEGRADE_MS = 5 * 60 * 1000;
-
 function classify(service, now) {
   if (!service.logs.length) return 'silent';
   const latestTs = Math.max(...service.logs.map(l => new Date(l.timestamp).getTime()));
@@ -12,19 +10,15 @@ function classify(service, now) {
   );
   return hasHigh ? 'degraded' : 'healthy';
 }
-
 const fmt = (ts) => {
   if (!ts) return '—';
   const d = new Date(ts);
   return isNaN(d) ? '—' : d.toLocaleTimeString();
 };
-
 const STATUS_LABEL  = { healthy: 'Healthy', degraded: 'Degraded', silent: 'Silent' };
 const STATUS_COLORS = { healthy: '#4ade80', degraded: '#fbbf24', silent: '#52526a' };
-
 export default function ServiceHealth({ logs }) {
   const now = Date.now();
-
   const services = useMemo(() => {
     const map = {};
     logs.forEach(log => {
@@ -45,14 +39,12 @@ export default function ServiceHealth({ logs }) {
       return order[a.status] - order[b.status];
     });
   }, [logs]);
-
   if (services.length === 0)
     return (
       <div className="empty-state">
         No services detected. Set a <code style={{ color: '#818cf8' }}>service</code> field when submitting logs.
       </div>
     );
-
   return (
     <>
       <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 20 }}>
@@ -66,7 +58,6 @@ export default function ServiceHealth({ logs }) {
           );
         })}
       </div>
-
       <div className="health-grid">
         {services.map(svc => (
           <div key={svc.name} className="health-card">

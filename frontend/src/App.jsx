@@ -5,7 +5,6 @@ import LiveFeed      from './components/LiveFeed.jsx';
 import StatsPanel    from './components/StatsPanel.jsx';
 import TraceExplorer from './components/TraceExplorer.jsx';
 import ServiceHealth from './components/ServiceHealth.jsx';
-
 const API  = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const TABS = [
   { id: 'Live Feed', icon: '◉' },
@@ -13,21 +12,16 @@ const TABS = [
   { id: 'Traces',    icon: '⌖' },
   { id: 'Health',    icon: '◈' },
 ];
-
 export default function App() {
   const [logs,      setLogs]      = useState([]);
   const [tab,       setTab]       = useState('Live Feed');
   const [connected, setConnected] = useState(false);
   const esRef = useRef(null);
-
-  // ── SSE ──────────────────────────────────────────────────────────────────
   const connectSse = useCallback(() => {
     if (esRef.current) esRef.current.close();
     const es = new EventSource(`${API}/api/logs/stream`);
     esRef.current = es;
-
     es.onopen = () => setConnected(true);
-
     es.addEventListener('log', (e) => {
       try {
         const log = JSON.parse(e.data);
@@ -37,15 +31,12 @@ export default function App() {
         });
       } catch (_) {}
     });
-
     es.onerror = () => {
       setConnected(false);
       es.close();
       setTimeout(connectSse, 3000);
     };
   }, []);
-
-  // ── Initial load + SSE ───────────────────────────────────────────────────
   useEffect(() => {
     axios.get(`${API}/api/logs`)
          .then(r => setLogs([...r.data].reverse()))
@@ -53,22 +44,17 @@ export default function App() {
     connectSse();
     return () => { if (esRef.current) esRef.current.close(); };
   }, [connectSse]);
-
-  // ── Actions ───────────────────────────────────────────────────────────────
   const addLog = async (payload) => {
     try { await axios.post(`${API}/api/logs`, payload); }
     catch (e) { console.error(e); }
   };
-
   const clearLogs = async () => {
     try { await axios.delete(`${API}/api/logs`); setLogs([]); }
     catch (e) { console.error(e); }
   };
-
   return (
     <div className="app">
-
-      {/* ── Header ── */}
+      {}
       <header className="header">
         <div className="header-inner">
           <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -81,8 +67,7 @@ export default function App() {
           <span className="header-right">{logs.length} / 5000 entries</span>
         </div>
       </header>
-
-      {/* ── Nav ── */}
+      {}
       <nav className="nav">
         <div className="nav-inner">
           {TABS.map(({ id, icon }) => (
@@ -96,8 +81,7 @@ export default function App() {
           ))}
         </div>
       </nav>
-
-      {/* ── Page ── */}
+      {}
       <main className="page">
         <div className="page-inner">
           {tab === 'Live Feed' && <LiveFeed    logs={logs} addLog={addLog} clearLogs={clearLogs} />}
@@ -106,7 +90,6 @@ export default function App() {
           {tab === 'Health'    && <ServiceHealth logs={logs} />}
         </div>
       </main>
-
     </div>
   );
 }

@@ -1,23 +1,14 @@
 package logger.sdk;
-
-/**
- * Immutable log entry sent by the SDK.
- * Use LogEntry.builder() to construct.
- */
 public class LogEntry {
-
     private String data;
-    private String severity;   // HIGH | WARN | LOW
+    private String severity;   
     private String service;
     private String traceId;
     private String spanId;
     private String threadName;
     private String environment;
     private String stackTrace;
-
-    // Jackson needs a no-arg constructor
     LogEntry() {}
-
     private LogEntry(Builder b) {
         this.data        = b.data;
         this.severity    = b.severity;
@@ -28,7 +19,6 @@ public class LogEntry {
         this.environment = b.environment;
         this.stackTrace  = b.stackTrace;
     }
-
     public String getData()        { return data; }
     public String getSeverity()    { return severity; }
     public String getService()     { return service; }
@@ -37,9 +27,7 @@ public class LogEntry {
     public String getThreadName()  { return threadName; }
     public String getEnvironment() { return environment; }
     public String getStackTrace()  { return stackTrace; }
-
     public static Builder builder(String message) { return new Builder(message); }
-
     public static class Builder {
         private final String data;
         private String severity   = "LOW";
@@ -49,9 +37,7 @@ public class LogEntry {
         private String threadName;
         private String environment = "prod";
         private String stackTrace;
-
         Builder(String data) { this.data = data; }
-
         public Builder severity(String s)    { this.severity    = s; return this; }
         public Builder high()                { return severity("HIGH"); }
         public Builder warn()                { return severity("WARN"); }

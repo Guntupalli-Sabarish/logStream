@@ -1,19 +1,16 @@
 import { useState, useMemo } from 'react';
 import axios from 'axios';
-
 const fmt = (ts) => {
   if (!ts) return 'N/A';
   const d = new Date(ts);
   return isNaN(d) ? 'N/A' : `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
 };
 const sevClass = (s) => (s ? s.toLowerCase() : 'low');
-
 export default function TraceExplorer({ api, logs }) {
   const [input,   setInput]   = useState('');
   const [traceId, setTraceId] = useState('');
-  const [remote,  setRemote]  = useState(null); // fetched from server
+  const [remote,  setRemote]  = useState(null); 
   const [loading, setLoading] = useState(false);
-
   const search = async () => {
     const tid = input.trim();
     if (!tid) return;
@@ -25,8 +22,6 @@ export default function TraceExplorer({ api, logs }) {
     } catch { setRemote([]); }
     finally { setLoading(false); }
   };
-
-  // Display server results if available, else filter local state
   const events = useMemo(() => {
     if (remote !== null) return [...remote].sort((a, b) =>
       new Date(a.timestamp) - new Date(b.timestamp));
@@ -34,12 +29,9 @@ export default function TraceExplorer({ api, logs }) {
     return [...logs.filter(l => l.traceId === traceId)]
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }, [remote, logs, traceId]);
-
-  // Unique trace IDs visible in current log state
   const knownTraces = useMemo(() =>
     [...new Set(logs.map(l => l.traceId).filter(Boolean))].slice(0, 20),
     [logs]);
-
   return (
     <>
       <div className="card" style={{ marginBottom: 16 }}>
@@ -59,7 +51,6 @@ export default function TraceExplorer({ api, logs }) {
             </button>
           )}
         </div>
-
         {knownTraces.length > 0 && (
           <div style={{ marginTop: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Known traces: </span>
@@ -73,9 +64,7 @@ export default function TraceExplorer({ api, logs }) {
           </div>
         )}
       </div>
-
       {loading && <div className="empty-state">Searching…</div>}
-
       {!loading && traceId && (
         <div className="card">
           <div className="feed-header">
@@ -84,7 +73,6 @@ export default function TraceExplorer({ api, logs }) {
             </span>
             <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{events.length} events</span>
           </div>
-
           {events.length === 0
             ? <div className="empty-state">No logs found for this trace ID.</div>
             : (
@@ -107,7 +95,6 @@ export default function TraceExplorer({ api, logs }) {
             )}
         </div>
       )}
-
       {!traceId && (
         <div className="empty-state">
           Enter a trace ID above to see all logs for a request across services.

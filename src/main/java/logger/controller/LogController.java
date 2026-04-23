@@ -1,5 +1,4 @@
 package logger.controller;
-
 import logger.alert.AlertEngine;
 import logger.alert.AlertRule;
 import logger.enums.Severity;
@@ -12,19 +11,15 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import logger.service.SseEmitterRegistry;
-
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/logs")
 public class LogController {
-
     private final Logger            loggerService;
     private final StatsService      statsService;
     private final SseEmitterRegistry emitterRegistry;
-
     public LogController(Logger loggerService,
                          StatsService statsService,
                          SseEmitterRegistry emitterRegistry) {
@@ -32,9 +27,6 @@ public class LogController {
         this.statsService    = statsService;
         this.emitterRegistry = emitterRegistry;
     }
-
-    // ── GET /api/logs  (supports query params) ───────────────────────────────
-
     @GetMapping
     public List<Log> getLogs(
             @RequestParam(required = false) String severity,
@@ -44,14 +36,11 @@ public class LogController {
             @RequestParam(required = false) Long   from,
             @RequestParam(required = false) Long   to,
             @RequestParam(required = false, defaultValue = "500") int limit) {
-
-        // No query params → return full list (fast path)
         boolean hasFilter = severity != null || service != null || traceId != null
                 || search != null || from != null || to != null;
         if (!hasFilter) {
             return loggerService.getLogs();
         }
-
         LogQuery query = new LogQuery();
         if (severity != null) {
             try { query.setSeverity(Severity.valueOf(severity.toUpperCase())); }
@@ -63,21 +52,14 @@ public class LogController {
         query.setFrom(from);
         query.setTo(to);
         query.setLimit(limit);
-
         return loggerService.queryLogs(query);
     }
-
-    // ── POST /api/logs ────────────────────────────────────────────────────────
-
     @PostMapping
     public Log addLog(@RequestBody Log log) {
         enrich(log);
         loggerService.addLog(log);
         return log;
     }
-
-    // ── POST /api/logs/batch ──────────────────────────────────────────────────
-
     @PostMapping("/batch")
     public List<Log> addBatch(@RequestBody List<Log> logs) {
         logs.forEach(log -> {
@@ -86,30 +68,18 @@ public class LogController {
         });
         return logs;
     }
-
-    // ── DELETE /api/logs ──────────────────────────────────────────────────────
-
     @DeleteMapping
     public void clearLogs() {
         loggerService.clearLogs();
     }
-
-    // ── GET /api/logs/stats ───────────────────────────────────────────────────
-
     @GetMapping("/stats")
     public LogStats getStats() {
         return statsService.compute(loggerService.getLogs());
     }
-
-    // ── GET /api/logs/stream (SSE) ────────────────────────────────────────────
-
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
         return emitterRegistry.register();
     }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
     private void enrich(Log log) {
         if (log.getId() == null || log.getId().isBlank()) {
             log.setId(UUID.randomUUID().toString());
@@ -124,5 +94,4 @@ public class LogController {
             log.setEnvironment("dev");
         }
     }
-
 }

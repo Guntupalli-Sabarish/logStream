@@ -1,13 +1,10 @@
 import { useState, useMemo } from 'react';
-
 const fmt = (ts) => {
   if (!ts) return 'N/A';
   const d = new Date(ts);
   return isNaN(d) ? 'N/A' : d.toLocaleTimeString();
 };
-
 const sevClass = (s) => (s ? s.toLowerCase() : 'low');
-
 export default function LiveFeed({ logs, addLog, clearLogs }) {
   const [text,     setText]     = useState('');
   const [severity, setSeverity] = useState('LOW');
@@ -15,7 +12,6 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
   const [traceId,  setTraceId]  = useState('');
   const [search,   setSearch]   = useState('');
   const [sevFilter, setSevFilter] = useState('ALL');
-
   const submit = () => {
     if (!text.trim()) return;
     addLog({
@@ -27,7 +23,6 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
     });
     setText('');
   };
-
   const filtered = useMemo(() => {
     return logs.filter(log => {
       let matchSearch = true;
@@ -42,10 +37,9 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
       return matchSearch && matchSev;
     });
   }, [logs, search, sevFilter]);
-
   return (
     <>
-      {/* ── Input card ── */}
+      {}
       <div className="card controls" style={{ marginBottom: 16 }}>
         <div className="row">
           <select id="sev-select" className="input-field" style={{ maxWidth: 110 }}
@@ -69,8 +63,7 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
             value={traceId} onChange={e => setTraceId(e.target.value)} />
         </div>
       </div>
-
-      {/* ── Filter bar ── */}
+      {}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
           <input id="search-input" className="input-field" placeholder="Search / regex…"
@@ -84,8 +77,7 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
           </select>
         </div>
       </div>
-
-      {/* ── Log list ── */}
+      {}
       <div className="card">
         <div className="feed-header">
           <span className="feed-title">
@@ -95,7 +87,6 @@ export default function LiveFeed({ logs, addLog, clearLogs }) {
             Clear All
           </button>
         </div>
-
         {filtered.length === 0
           ? <div className="empty-state">No logs yet. Add one above or wait for your services.</div>
           : (

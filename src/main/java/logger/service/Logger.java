@@ -1,5 +1,4 @@
 package logger.service;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import logger.alert.AlertEngine;
@@ -7,7 +6,6 @@ import logger.data.FileStore;
 import logger.model.LogQuery;
 import logger.pojo.Log;
 import org.springframework.stereotype.Service;
-
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -17,24 +15,18 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 @Service
 public class Logger {
-
     private static final int MAX_LOGS      = 5_000;
     private static final int QUEUE_CAPACITY = 10_000;
     private static final Log POISON_PILL   = new Log("__POISON__");
-
     private final ArrayDeque<Log>          logStore    = new ArrayDeque<>(MAX_LOGS + 1);
     private final ReadWriteLock            storeLock   = new ReentrantReadWriteLock();
     private final LinkedBlockingQueue<Log> queue       = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-
     private final FileStore          fileStore;
     private final SseEmitterRegistry emitterRegistry;
     private final AlertEngine        alertEngine;
-
     private Thread consumerThread;
-
     public Logger(FileStore fileStore,
                   SseEmitterRegistry emitterRegistry,
                   AlertEngine alertEngine) {
@@ -42,14 +34,12 @@ public class Logger {
         this.emitterRegistry = emitterRegistry;
         this.alertEngine     = alertEngine;
     }
-
     @PostConstruct
     public void init() {
         consumerThread = new Thread(this::processQueue, "log-consumer");
         consumerThread.setDaemon(false);
         consumerThread.start();
     }
-
     @PreDestroy
     public void shutdown() {
         queue.offer(POISON_PILL);
@@ -60,9 +50,6 @@ public class Logger {
         }
         fileStore.close();
     }
-
-    // ── Producer ────────────────────────────────────────────────────────────
-
     public void addLog(Log log) {
         storeLock.writeLock().lock();
         try {
@@ -71,14 +58,10 @@ public class Logger {
         } finally {
             storeLock.writeLock().unlock();
         }
-
-        queue.offer(log);              // non-blocking: drop if full
-        emitterRegistry.broadcast(log); // push to SSE clients
-        alertEngine.evaluate(log);     // check alert rules (fast, no I/O)
+        queue.offer(log);              
+        emitterRegistry.broadcast(log); 
+        alertEngine.evaluate(log);     
     }
-
-    // ── Consumer ────────────────────────────────────────────────────────────
-
     private void processQueue() {
         while (true) {
             try {
@@ -97,9 +80,6 @@ public class Logger {
             }
         }
     }
-
-    // ── Queries ─────────────────────────────────────────────────────────────
-
     public List<Log> getLogs() {
         storeLock.readLock().lock();
         try {
@@ -108,12 +88,10 @@ public class Logger {
             storeLock.readLock().unlock();
         }
     }
-
     public List<Log> queryLogs(LogQuery query) {
         storeLock.readLock().lock();
         try {
             Stream<Log> stream = logStore.stream();
-
             if (query.getSeverity() != null) {
                 stream = stream.filter(l -> query.getSeverity().equals(l.getSeverity()));
             }
@@ -135,14 +113,12 @@ public class Logger {
                 stream = stream.filter(l -> l.getTimestamp() != null
                         && l.getTimestamp().getTime() <= query.getTo());
             }
-
             int limit = query.getLimit() > 0 ? query.getLimit() : 500;
             return stream.limit(limit).collect(Collectors.toList());
         } finally {
             storeLock.readLock().unlock();
         }
     }
-
     public void clearLogs() {
         storeLock.writeLock().lock();
         try {
@@ -153,11 +129,7 @@ public class Logger {
         queue.clear();
         fileStore.clearFile();
     }
-
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
     private boolean isSet(String s) { return s != null && !s.isBlank(); }
-
     private Pattern buildPattern(String search) {
         try {
             return Pattern.compile(search, Pattern.CASE_INSENSITIVE);
@@ -165,5 +137,4 @@ public class Logger {
             return Pattern.compile(Pattern.quote(search), Pattern.CASE_INSENSITIVE);
         }
     }
-
 }

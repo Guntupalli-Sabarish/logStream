@@ -5,9 +5,7 @@ import {
   PieChart, Pie, Cell,
   BarChart, Bar,
 } from 'recharts';
-
 const SEV_COLORS = { HIGH: '#f87171', WARN: '#fbbf24', LOW: '#4ade80', UNKNOWN: '#52526a' };
-
 const TOOLTIP_STYLE = {
   background: '#121320',
   border: '1px solid rgba(255,255,255,0.10)',
@@ -15,10 +13,8 @@ const TOOLTIP_STYLE = {
   color: '#eeeef5',
   fontSize: 12,
 };
-
 export default function StatsPanel({ api }) {
   const [stats, setStats] = useState(null);
-
   useEffect(() => {
     const load = () =>
       axios.get(`${api}/api/logs/stats`).then(r => setStats(r.data)).catch(() => {});
@@ -26,18 +22,15 @@ export default function StatsPanel({ api }) {
     const id = setInterval(load, 5000);
     return () => clearInterval(id);
   }, [api]);
-
   if (!stats) return <div className="empty-state">Loading stats…</div>;
-
   const sevPie = Object.entries(stats.bySeverity || {}).map(([name, value]) => ({ name, value }));
   const svcBar = Object.entries(stats.byService || {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, value]) => ({ name, value }));
-
   return (
     <>
-      {/* ── KPIs ── */}
+      {}
       <div className="kpi-row">
         <div className="kpi">
           <div className="kpi-val">{stats.total}</div>
@@ -56,11 +49,9 @@ export default function StatsPanel({ api }) {
           <div className="kpi-lbl">Warnings</div>
         </div>
       </div>
-
-      {/* ── Charts ── */}
+      {}
       <div className="stats-grid">
-
-        {/* Rate over time */}
+        {}
         <div className="stat-card span-3">
           <h3>Log Rate — Last 10 Minutes</h3>
           <ResponsiveContainer width="100%" height={190}>
@@ -83,8 +74,7 @@ export default function StatsPanel({ api }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Severity pie */}
+        {}
         <div className="stat-card">
           <h3>Severity Distribution</h3>
           {sevPie.length === 0
@@ -107,8 +97,7 @@ export default function StatsPanel({ api }) {
               </ResponsiveContainer>
             )}
         </div>
-
-        {/* Top services */}
+        {}
         <div className="stat-card span-2">
           <h3>Top Services by Volume</h3>
           {svcBar.length === 0
@@ -133,7 +122,6 @@ export default function StatsPanel({ api }) {
               </ResponsiveContainer>
             )}
         </div>
-
       </div>
     </>
   );
