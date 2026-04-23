@@ -126,8 +126,8 @@ public class Logger {
         } finally {
             storeLock.writeLock().unlock();
         }
-        queue.clear();
         fileStore.clearFile();
+        queue.clear();
     }
     private boolean isSet(String s) { return s != null && !s.isBlank(); }
     private Pattern buildPattern(String search) {

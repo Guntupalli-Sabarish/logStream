@@ -6,7 +6,6 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 @Component
 public class FileStore implements Datastore {
@@ -47,8 +46,19 @@ public class FileStore implements Datastore {
     }
     private Log sanitize(Log log) {
         if (log.getData() == null) return log;
-        log.setData(log.getData().replaceAll("[\\r\\n\\t]", " "));
-        return log;
+        Log copy = new Log();
+        copy.setId(log.getId());
+        copy.setData(log.getData().replaceAll("[\\r\\n\\t]", " "));
+        copy.setTimestamp(log.getTimestamp());
+        copy.setSeverity(log.getSeverity());
+        copy.setService(log.getService());
+        copy.setThreadName(log.getThreadName());
+        copy.setThreadId(log.getThreadId());
+        copy.setTraceId(log.getTraceId());
+        copy.setSpanId(log.getSpanId());
+        copy.setEnvironment(log.getEnvironment());
+        copy.setStackTrace(log.getStackTrace());
+        return copy;
     }
     @Override
     public void clearFile() {
@@ -74,8 +84,5 @@ public class FileStore implements Datastore {
         } finally {
             writeLock.unlock();
         }
-    }
-    @Override
-    public void appendLog() throws TimeoutException {
     }
 }

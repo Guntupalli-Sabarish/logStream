@@ -1,6 +1,4 @@
 package logger.controller;
-import logger.alert.AlertEngine;
-import logger.alert.AlertRule;
 import logger.enums.Severity;
 import logger.model.LogQuery;
 import logger.model.LogStats;
@@ -80,6 +78,11 @@ public class LogController {
     public SseEmitter stream() {
         return emitterRegistry.register();
     }
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public org.springframework.http.ResponseEntity<String> handleInvalidJson(Exception e) {
+        return org.springframework.http.ResponseEntity.badRequest().body("Invalid request payload: " + e.getMessage());
+    }
+
     private void enrich(Log log) {
         if (log.getId() == null || log.getId().isBlank()) {
             log.setId(UUID.randomUUID().toString());
